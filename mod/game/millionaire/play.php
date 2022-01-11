@@ -38,9 +38,9 @@ function game_millionaire_continue( $cm, $game, $attempt, $millionaire, $context
     // User must select quiz or question as a source module.
     if (($game->quizid == 0) and ($game->questioncategoryid == 0)) {
         if ($game->sourcemodule == 'quiz') {
-            print_error( get_string( 'millionaire_must_select_quiz', 'game'));
+            throw new moodle_exception( 'millionaire_must_select_quiz', 'game');
         } else {
-            print_error( get_string( 'millionaire_must_select_questioncategory', 'game'));
+            throw new moodle_exception( 'millionaire_must_select_questioncategory', 'game');
         }
     }
 
@@ -60,7 +60,7 @@ function game_millionaire_continue( $cm, $game, $attempt, $millionaire, $context
     $newrec->state = 0;
 
     if (!game_insert_record(  'game_millionaire', $newrec)) {
-        print_error( 'error inserting in game_millionaire');
+        throw new moodle_exception( 'millionaire_error', 'game', 'error inserting in game_millionaire');
     }
 
     game_millionaire_play( $cm, $game, $attempt, $newrec, $context, $course);
@@ -266,7 +266,6 @@ function game_millionaire_showgrid( $game, $millionaire, $id, $query, $aanswer, 
         }
     }
     echo "<tr $background><td colspan=10>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td></tr>\r\n";
-
     $bfirst = true;
     $letters = get_string( 'millionaire_lettersall', 'game');
     if (($letters == '') or ($letters == '-')) {
@@ -282,7 +281,7 @@ function game_millionaire_showgrid( $game, $millionaire, $id, $query, $aanswer, 
         if ((strpos( $aanswer[ $i - 1], 'color:') != false) or (strpos( $aanswer[ $i - 1], 'background:') != false)) {
             $style = '';
         }
-        if ($state == 15 and $i + 1 == $query->correct) {
+        if ($state == 15 and $i == $query->correct) {
             $style = $stylequestionselected;
         }
 
@@ -356,8 +355,8 @@ function game_millionaire_selectquestion( &$aanswer, $game, $attempt, &$milliona
     global $DB, $USER;
 
     if (($game->sourcemodule != 'quiz') and ($game->sourcemodule != 'question')) {
-        print_error( get_string('millionaire_sourcemodule_must_quiz_question', 'game',
-            get_string( 'modulename', 'quiz')).' '.get_string( 'modulename', $attempt->sourcemodule));
+        throw new moodle_exception( 'millionaire_sourcemodule_must_quiz_question', 'game',
+            get_string( 'modulename', 'quiz').' '.get_string( 'modulename', $attempt->sourcemodule));
     }
 
     if ($millionaire->queryid != 0) {
@@ -367,7 +366,7 @@ function game_millionaire_selectquestion( &$aanswer, $game, $attempt, &$milliona
 
     if ($game->sourcemodule == 'quiz') {
         if ($game->quizid == 0) {
-            print_error( get_string( 'must_select_quiz', 'game'));
+            throw new moodle_exception( 'must_select_quiz', 'game');
         }
         if (game_get_moodle_version() < '02.06') {
             $select = "qtype='multichoice' AND quiz='$game->quizid' AND qmo.question=q.id".
@@ -388,7 +387,7 @@ function game_millionaire_selectquestion( &$aanswer, $game, $attempt, &$milliona
     } else {
         // Source is questions.
         if ($game->questioncategoryid == 0) {
-            print_error( get_string( 'must_select_questioncategory', 'game'));
+            throw new moodle_exception( 'must_select_questioncategory', 'game');
         }
 
         // Include subcategories.
@@ -412,11 +411,11 @@ function game_millionaire_selectquestion( &$aanswer, $game, $attempt, &$milliona
     if ($game->shuffle or $game->quizid == 0) {
         $questionid = game_question_selectrandom( $game, $table, $select, 'q.id as id', true);
     } else {
-        $questionid = game_millionaire_select_serial_question( $game, $table, $select, 'q.id as id', $millionaire->level, $order);
+        $questionid = game_millionaire_select_serial_question($game, $table, $select, $millionaire->level, $order, 'q.id as id');
     }
 
     if ($questionid == 0) {
-        print_error( get_string( 'no_questions', 'game'));
+        throw new moodle_exception( 'no_questions', 'game');
     }
 
     $q = $DB->get_record( 'question', array( 'id' => $questionid), 'id,questiontext');
@@ -424,7 +423,7 @@ function game_millionaire_selectquestion( &$aanswer, $game, $attempt, &$milliona
     $recs = $DB->get_records( 'question_answers', array( 'question' => $questionid));
 
     if ($recs === false) {
-        print_error( get_string( 'no_questions', 'game'));
+        throw new moodle_exception( 'no_questions', 'game');
     }
 
     $correct = 0;
@@ -461,7 +460,7 @@ function game_millionaire_selectquestion( &$aanswer, $game, $attempt, &$milliona
     $query->answertext = implode( ',', $ids);
     $query->correct = array_search( $correct, $ids) + 1;
     if (!$query->id = $DB->insert_record(  'game_queries', $query)) {
-        print_error( 'error inserting to game_queries');
+        throw new moodle_exception( 'millionaire_error', 'game', 'error inserting to game_queries');
     }
 
     $updrec = new StdClass;
@@ -469,7 +468,7 @@ function game_millionaire_selectquestion( &$aanswer, $game, $attempt, &$milliona
     $updrec->queryid = $query->id;
 
     if (!$newid = $DB->update_record(  'game_millionaire', $updrec)) {
-        print_error( 'error updating in game_millionaire');
+        throw new moodle_exception( 'millionaire_error', 'game', 'error updating in game_millionaire');
     }
 
     $score = $millionaire->level / 15;
@@ -482,11 +481,11 @@ function game_millionaire_selectquestion( &$aanswer, $game, $attempt, &$milliona
  * @param stdClass $game
  * @param string $table
  * @param string $select
- * @param string $idfields
  * @param int $level
  * @param string $order
+ * @param string $idfields
  */
-function game_millionaire_select_serial_question( $game, $table, $select, $idfields = "id", $level, $order) {
+function game_millionaire_select_serial_question($game, $table, $select, $level, $order, $idfields = "id") {
     global $DB, $USER;
 
     $sql  = "SELECT $idfields,$idfields FROM ".$table." WHERE $select ";
@@ -555,7 +554,7 @@ function game_millionaire_setstate( &$millionaire, $mask) {
     $updrec->id = $millionaire->id;
     $updrec->state = $millionaire->state;
     if (!$DB->update_record(  'game_millionaire', $updrec)) {
-        print_error( 'error updating in game_millionaire');
+        throw new moodle_exception( 'millionaire_error', 'game', 'error updating in game_millionaire');
     }
 }
 
@@ -725,7 +724,7 @@ function game_millionaire_onanswer( $cm, $game, $attempt, &$millionaire, $query,
     $updrec->level = $millionaire->level;
     $updrec->queryid = 0;
     if (!$DB->update_record(  'game_millionaire', $updrec)) {
-        print_error( 'error updating in game_millionaire');
+        throw new moodle_exception( 'millionaire_error', 'game', 'error updating in game_millionaire');
     }
 
     if ($answer == $query->correct) {

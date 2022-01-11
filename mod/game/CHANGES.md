@@ -1,16 +1,48 @@
-Changes in version 2020-08-19
+Changes in version 2021-12-23-04
+* Fix: At backup new field of table game
+
+Changes in version 2021-12-23-03
+* Fix: Warning in test cases.
+
+Changes in version 2021-12-23-02
+* Fix: Rename tests/generator_test.php to tests/generator_testcase.php
+
+Changes in version 2021-12-23-01
+* Fix: Problem when using secondary glossaries as source of questions.
+
+Changes in version 2021-12-23
+* Fix: Millionaire: On errors does not select the correct answer
+
+Changes in version 2021-11-02
+* Fix: Completion problem
+
+Changes in version 2021-06-20
+* Fix Snakes: Shuffles answer in multichoice questions
+
+Changes in version 2021-05-31
+* Fix hiddenpicture: Problem when user gives wrong answer
+
+Changes in version 2021-05-08
+* Fix: Compatibility problems for Moodle 3.11
+
+Changes in version 2021-05-03
+* Crossword: Makes better legend
+
+Changes in version 2021-05-02
+* Fix: Compatibility problems for Moodle 3.11
+
+Changes in version 2021-05-01
+* Fix: Updated high score query for postgresql compatibility
+
+Change for year 2020
+------------------------------------------------------------------
 - Fix: Moodle 2.72 compatibility
-
-Changes in version 2020-07-25
 - Fix: Problem when finishing Millionaire game
-
-
-Changes in version 2020-05-10
 - Fix: typo problem in corrert character
 - Fix: max attempts in cryptex
 
-
-Change for year 2018
+Change for year 2019
+------------------------------------------------------------------
 - Fixes in Hangman by Filippos Kolovos
 - Hide "Check crossword" when crossword is finished.
 - CONTRIB-7699 Problem with upgrading game plugin
@@ -23,6 +55,7 @@ Change for year 2018
 
 
 Change for year 2018
+------------------------------------------------------------------
 - Book with questions works again
 - GDPR compliant
 - The game "Book with questions" is now hidden by default

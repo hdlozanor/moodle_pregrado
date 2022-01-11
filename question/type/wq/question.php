@@ -76,7 +76,7 @@ class qtype_wq_question extends question_graded_automatically {
         // End testing code.
 
         // Create request to call service.
-        $request = $builder->newVariablesRequest($text, $this->wirisquestioninstance);
+        $request = $builder->newVariablesRequestWithQuestionData($text, $this->wirisquestioninstance);
         // Do the call only if needed.
         if (!$request->isEmpty()) {
             $response = $this->call_wiris_service($request);
@@ -101,7 +101,7 @@ class qtype_wq_question extends question_graded_automatically {
         // otherwise.
         if (!$this->wirisquestioninstance->areVariablesReady()) {
             // We make a new request to the service if plotter images are not cached.
-            $request = $builder->newVariablesRequest($this->join_all_text(), $this->wirisquestioninstance);
+            $request = $builder->newVariablesRequestWithQuestionData($this->join_all_text(), $this->wirisquestioninstance);
             $response = $this->call_wiris_service($request);
             $this->wirisquestioninstance->update($response);
             // We don't need to save this question instance in database because
@@ -112,7 +112,7 @@ class qtype_wq_question extends question_graded_automatically {
         // So we need to recompute variables.
         // Each attempt builds on the last (question_attempt_step_read_only) shouldn't recompute variables.
         if ($step->get_state() instanceof question_state_complete && !($step instanceof question_attempt_step_read_only)) {
-            $request = $builder->newVariablesRequest($this->join_all_text(), $this->wirisquestioninstance);
+            $request = $builder->newVariablesRequestWithQuestionData($this->join_all_text(), $this->wirisquestioninstance);
             $response = $this->call_wiris_service($request);
             $this->wirisquestioninstance->update($response);
             // Save the result.
@@ -153,7 +153,7 @@ class qtype_wq_question extends question_graded_automatically {
         $expected = $this->base->get_expected_data();
         $expected['_sqi'] = PARAM_RAW_TRIMMED;
         $expected['auxiliar_text'] = question_attempt::PARAM_RAW_FILES;
-        $expecteddata['attachments'] = question_attempt::PARAM_FILES;
+        $expected['attachments'] = question_attempt::PARAM_FILES;
         return $expected;
     }
 
@@ -177,6 +177,15 @@ class qtype_wq_question extends question_graded_automatically {
     public function expand_variables($text) {
         if (isset($this->wirisquestioninstance)) {
             $text = $this->wirisquestioninstance->expandVariables($text);
+        }
+        return $this->filtercodes_compatibility($text);
+    }
+
+    private function filtercodes_compatibility($text) {
+        $configfiltercodes = get_config('qtype_wq', 'filtercodes_compatibility');
+        if (isset($configfiltercodes) && $configfiltercodes == '1') {
+            $text = str_replace('[{', '[[{', $text);
+            $text = str_replace('}]', '}]]', $text);
         }
         return $text;
     }
@@ -331,6 +340,13 @@ class qtype_wq_question extends question_graded_automatically {
 
         $service = $builder->getQuizzesService();
 
+        $isdebugmodeenabled = get_config('qtype_wq', 'debug_mode_enabled') == '1';
+
+        if ($isdebugmodeenabled) {
+            // @codingStandardsIgnoreLine
+            print_object($request->serialize());
+        }
+
         try {
             $response = $service->execute($request);
         } catch (Exception $e) {
@@ -345,9 +361,18 @@ class qtype_wq_question extends question_graded_automatically {
                 $link = $CFG->wwwroot . '/mod/quiz/view.php?id=' . $cmid;
             }
 
+            if ($isdebugmodeenabled) {
+                // @codingStandardsIgnoreLine
+                print_object($e);
+            }
+
             throw new moodle_exception('wirisquestionincorrect', 'qtype_wq', $link, $a, '');
         }
 
+        if ($isdebugmodeenabled) {
+            // @codingStandardsIgnoreLine
+            print_object($response->serialize());
+        }
         return $response;
     }
 }

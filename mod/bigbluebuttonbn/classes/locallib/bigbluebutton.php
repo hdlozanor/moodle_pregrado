@@ -25,6 +25,7 @@
 
 namespace mod_bigbluebuttonbn\locallib;
 
+use context_course;
 use context_module;
 
 defined('MOODLE_INTERNAL') || die();
@@ -210,8 +211,12 @@ class bigbluebutton {
             $bbbsession['recordhidebutton'] = $bbbsession['bigbluebuttonbn']->recordhidebutton;
         }
         $bbbsession['welcome'] = $bbbsession['bigbluebuttonbn']->welcome;
-        if (!isset($bbbsession['welcome']) || $bbbsession['welcome'] == '') {
-            $bbbsession['welcome'] = get_string('mod_form_field_welcome_default', 'bigbluebuttonbn');
+        if (!isset($bbbsession['welcome']) || $bbbsession['welcome'] == '' || !config::get('welcome_editable')) {
+            // CONTRIB-8573: default to the config and if empty, then the default string.
+            $bbbsession['welcome'] = config::get('welcome_default');
+            if (!$bbbsession['welcome']) {
+                $bbbsession['welcome'] = get_string('mod_form_field_welcome_default', 'bigbluebuttonbn');
+            }
         }
         if ($bbbsession['bigbluebuttonbn']->record) {
             // Check if is enable record all from start.
@@ -289,5 +294,34 @@ class bigbluebutton {
             }
         }
         return $canjoin;
+    }
+
+    /**
+     * Check if a user has access to a given group.
+     *
+     * @param $groupid
+     * @param $user
+     * @param $course
+     * @param $cm
+     * @return bool
+     */
+    public static function user_can_access_groups($groupid, $user, $course, $cm) {
+        $groupmode = groups_get_activity_groupmode($cm);
+        $context = context_course::instance($course->id);
+        $aag = has_capability('moodle/site:accessallgroups', $context, $user);
+        if ($aag) {
+            return true;
+        }
+        if ($groupmode == VISIBLEGROUPS or $aag) {
+            $allowedgroups = groups_get_all_groups($course->id, $user->id, $course->defaultgroupingid);
+        } else {
+            $allowedgroups = groups_get_all_groups($course->id, $user->id, $course->defaultgroupingid);
+        }
+        foreach ($allowedgroups as $g) {
+            if ($g->id == $groupid) {
+                return true;
+            }
+        }
+        return false;
     }
 }

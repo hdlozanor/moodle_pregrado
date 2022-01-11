@@ -308,7 +308,7 @@ class com_wiris_quizzes_impl_QuizzesImpl extends com_wiris_quizzes_api_Quizzes {
 			while($_g < $answers->length) {
 				$a = $answers[$_g];
 				++$_g;
-				$parts = com_wiris_quizzes_impl_HTMLTools::parseCompoundAnswer($a);
+				$parts = com_wiris_quizzes_impl_CompoundAnswerParser::parseCompoundAnswer($a);
 				$k = null;
 				{
 					$_g2 = 0; $_g1 = $parts->length;
@@ -369,7 +369,10 @@ class com_wiris_quizzes_impl_QuizzesImpl extends com_wiris_quizzes_api_Quizzes {
 			while($_g < $qq->length) {
 				$c = $qq[$_g];
 				++$_g;
-				$parts = com_wiris_quizzes_impl_HTMLTools::parseCompoundAnswer($c);
+				if($c === null) {
+					continue;
+				}
+				$parts = com_wiris_quizzes_impl_CompoundAnswerParser::parseCompoundAnswer($c);
 				if($aux !== null) {
 					$aux->set($c->id, $parts->length);
 				}
@@ -393,7 +396,7 @@ class com_wiris_quizzes_impl_QuizzesImpl extends com_wiris_quizzes_api_Quizzes {
 		}
 		return $correctAnswers;
 	}
-	public function breakCompoundCorrectAnswers($qa, $qq, $aux) {
+	public function breakCompoundCorrectAnswers($qa, $qq, $aux, $instance) {
 		if($qq->correctAnswers === null) {
 			return;
 		}
@@ -415,14 +418,40 @@ class com_wiris_quizzes_impl_QuizzesImpl extends com_wiris_quizzes_api_Quizzes {
 						while($_g1 < $authorAnswers->length) {
 							$aa = $authorAnswers[$_g1];
 							++$_g1;
-							$id = Std::parseInt($aa->value->id);
-							$ca = _hx_array_get($qq->correctAnswers->splice($id, 1), 0);
-							$correctAnswers->push($ca);
-							unset($id,$ca,$aa);
+							$correctAnswers->push($aa->value);
+							unset($aa);
 						}
 						unset($_g1);
 					}
 					$separated = $this->breakCompoundCorrectAnswersImpl($correctAnswers, $aux);
+					{
+						$_g1 = 0;
+						while($_g1 < $correctAnswers->length) {
+							$ca = $correctAnswers[$_g1];
+							++$_g1;
+							$qq->correctAnswers->remove($ca);
+							unset($ca);
+						}
+						unset($_g1);
+					}
+					if($instance !== null && $instance->hasVariables()) {
+						$_g1 = 0;
+						while($_g1 < $separated->length) {
+							$sepCA = $separated[$_g1];
+							++$_g1;
+							$isPlainTextField = $s->getAnswerFieldType() == com_wiris_quizzes_api_ui_AnswerFieldType::$TEXT_FIELD;
+							$isStringSyntax = $s->getSyntax()->getName() == com_wiris_quizzes_api_assertion_SyntaxName::$STRING;
+							$value = $sepCA->content;
+							if($isPlainTextField || $isStringSyntax) {
+								$value = $instance->expandVariablesText($value);
+							} else {
+								$value = $instance->expandVariablesMathMLEval($value);
+							}
+							$sepCA->set($value);
+							unset($value,$sepCA,$isStringSyntax,$isPlainTextField);
+						}
+						unset($_g1);
+					}
 					$qq->correctAnswers = $qq->correctAnswers->concat($separated);
 					unset($separated,$correctAnswers,$authorAnswers);
 				}
@@ -613,6 +642,22 @@ class com_wiris_quizzes_impl_QuizzesImpl extends com_wiris_quizzes_api_Quizzes {
 				if($ass->isSyntactic()) {
 					$syntax = $ass;
 				}
+				if($correctAnswers !== null) {
+					$assCA = $ass->getCorrectAnswers();
+					$caCounter = $assCA->length - 1;
+					while($caCounter >= 0) {
+						$ca = $assCA[$caCounter];
+						if(Std::parseInt($ca) >= $correctAnswers->length) {
+							$ass->removeCorrectAnswer($ca);
+						}
+						$caCounter--;
+						unset($ca);
+					}
+					if($ass->getCorrectAnswers()->length === 0) {
+						continue;
+					}
+					unset($caCounter,$assCA);
+				}
 				$qq->assertions->push($ass);
 				unset($j1,$ass);
 			}
@@ -651,14 +696,41 @@ class com_wiris_quizzes_impl_QuizzesImpl extends com_wiris_quizzes_api_Quizzes {
 			$_g1 = 0; $_g = $qq->getCorrectAnswersLength();
 			while($_g1 < $_g) {
 				$j1 = $_g1++;
-				$value = $qq->getCorrectAnswer($j1);
-				if(com_wiris_quizzes_impl_LocalData::$VALUE_OPENANSWER_INPUT_FIELD_PLAIN_TEXT === $qa->getLocalData(com_wiris_quizzes_impl_LocalData::$KEY_OPENANSWER_INPUT_FIELD) || $syntax->name === com_wiris_quizzes_impl_Assertion::$SYNTAX_STRING) {
+				$ca = $qq->correctAnswers[$j1];
+				$value = $ca->content;
+				$isPlainTextField = $qa->getAnswerFieldType() == com_wiris_quizzes_api_ui_AnswerFieldType::$TEXT_FIELD;
+				$isStringSyntax = $syntax->name === com_wiris_quizzes_impl_Assertion::$SYNTAX_STRING;
+				$slots = $qa->slots;
+				if($slots !== null) {
+					$_g2 = 0;
+					while($_g2 < $slots->length) {
+						$slot = $slots[$_g2];
+						++$_g2;
+						$authorAnswers = $slot->authorAnswers;
+						{
+							$_g3 = 0;
+							while($_g3 < $authorAnswers->length) {
+								$authorAnswer = $authorAnswers[$_g3];
+								++$_g3;
+								if($authorAnswer->id === $ca->id) {
+									$isPlainTextField = $slot->getAnswerFieldType() == com_wiris_quizzes_api_ui_AnswerFieldType::$TEXT_FIELD;
+									$isStringSyntax = $slot->getSyntax()->getName() == com_wiris_quizzes_api_assertion_SyntaxName::$STRING;
+								}
+								unset($authorAnswer);
+							}
+							unset($_g3);
+						}
+						unset($slot,$authorAnswers);
+					}
+					unset($_g2);
+				}
+				if($isPlainTextField || $isStringSyntax) {
 					$value = $qi->expandVariablesText($value);
 				} else {
 					$value = $qi->expandVariablesMathMLEval($value);
 				}
 				$qq->setCorrectAnswer($j1, $value);
-				unset($value,$j1);
+				unset($value,$slots,$j1,$isStringSyntax,$isPlainTextField,$ca);
 			}
 		}
 		$j = $qq->assertions->length - 1;
@@ -777,7 +849,7 @@ class com_wiris_quizzes_impl_QuizzesImpl extends com_wiris_quizzes_api_Quizzes {
 				$this->breakCompoundGraphical($qq);
 			} else {
 				$aux = new Hash();
-				$this->breakCompoundCorrectAnswers($qa, $qq, $aux);
+				$this->breakCompoundCorrectAnswers($qa, $qq, $aux, $qi);
 				$this->breakCompoundUserAnswers($qa, $qq, $uu);
 				$this->replicateCompoundAnswerAssertions($qa, $qq, $aux);
 			}
@@ -888,7 +960,7 @@ class com_wiris_quizzes_impl_QuizzesImpl extends com_wiris_quizzes_api_Quizzes {
 		$aux = new Hash();
 		if($ca !== null) {
 			$qq->correctAnswers = $ca->concat(new _hx_array(array()));
-			$this->breakCompoundCorrectAnswers($qq, $qq, $aux);
+			$this->breakCompoundCorrectAnswers($qq, $qq, $aux, null);
 		}
 		$aa = $q->getImpl()->assertions;
 		if($aa !== null) {
@@ -1022,7 +1094,7 @@ class com_wiris_quizzes_impl_QuizzesImpl extends com_wiris_quizzes_api_Quizzes {
 						continue;
 					}
 					if($slot->getInitialContent() !== null) {
-						$sb->add($slot->getInitialContent());
+						$sb->add($slot->getInitialContent() . " ");
 					}
 					$authorAnswers = $slot->getAuthorAnswers();
 					{
@@ -1031,7 +1103,7 @@ class com_wiris_quizzes_impl_QuizzesImpl extends com_wiris_quizzes_api_Quizzes {
 							$authorAnswer = $authorAnswers[$_g1];
 							++$_g1;
 							if($authorAnswer->getValue() !== null) {
-								$sb->add($authorAnswer->getValue());
+								$sb->add($authorAnswer->getValue() . " ");
 							}
 							unset($authorAnswer);
 						}
@@ -1137,7 +1209,7 @@ class com_wiris_quizzes_impl_QuizzesImpl extends com_wiris_quizzes_api_Quizzes {
 			$name = $qq->getOption(com_wiris_quizzes_api_QuizzesConstants::$OPTION_STUDENT_ANSWER_PARAMETER_NAME);
 			$defname = $qq->defaultOption(com_wiris_quizzes_api_QuizzesConstants::$OPTION_STUDENT_ANSWER_PARAMETER_NAME);
 			if($defname === $name) {
-				$lang = com_wiris_quizzes_impl_HTMLTools::casSessionLang($qq->getAlgorithm());
+				$lang = com_wiris_quizzes_impl_CalcDocumentTools::casSessionLang($qq->getAlgorithm());
 				$name = com_wiris_quizzes_impl_QuizzesTranslator::getInstance($lang)->t($name);
 			}
 			$n = 0;
@@ -1153,12 +1225,13 @@ class com_wiris_quizzes_impl_QuizzesImpl extends com_wiris_quizzes_api_Quizzes {
 							$n++;
 						} else {
 							if($qq->getLocalData(com_wiris_quizzes_impl_LocalData::$KEY_OPENANSWER_COMPOUND_ANSWER) === com_wiris_quizzes_impl_LocalData::$VALUE_OPENANSWER_COMPOUND_ANSWER_TRUE && $q->getCorrectAnswersLength() > 0) {
-								$parts = com_wiris_quizzes_impl_HTMLTools::parseCompoundAnswer($qq->correctAnswers[0]);
+								$correctAnswer = $qq->correctAnswers[0];
+								$parts = com_wiris_quizzes_impl_CompoundAnswerParser::parseCompoundAnswer($correctAnswer);
 								if(com_wiris_util_type_IntegerTools::isInt($after) && Std::parseInt($after) <= $parts->length) {
 									$variables[$i1] = null;
 									$n++;
 								}
-								unset($parts);
+								unset($parts,$correctAnswer);
 							}
 						}
 						unset($after);

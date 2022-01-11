@@ -938,7 +938,7 @@ function bigbluebuttonbn_pluginfile($course, $cm, $context, $filearea, $args, $f
         return false;
     }
     // Finally send the file.
-    send_stored_file($file, 0, 0, $forcedownload, $options); // download MUST be forced - security!
+    send_stored_file($file, 0, 0, $forcedownload, $options); // Download MUST be forced - security!
 }
 
 /**
@@ -1167,6 +1167,8 @@ function mod_bigbluebuttonbn_core_calendar_provide_event_action(
 
     require_once($CFG->dirroot . '/mod/bigbluebuttonbn/locallib.php');
 
+    $time = time();
+
     // Get mod info.
     $cm = get_fast_modinfo($event->courseid)->instances['bigbluebuttonbn'][$event->instance];
 
@@ -1177,18 +1179,23 @@ function mod_bigbluebuttonbn_core_calendar_provide_event_action(
     $usercomplete = bigbluebuttonbn_user_complete($event->courseid, $event->userid, $bigbluebuttonbn);
     // Get if the room is available.
     list($roomavailable) = bigbluebuttonbn_room_is_available($bigbluebuttonbn);
-    // Get if the user can join.
-    list($usercanjoin) = bigbluebuttonbn_user_can_join_meeting($bigbluebuttonbn);
-    // Get if the time has already passed.
-    $haspassed = $bigbluebuttonbn->openingtime < time();
 
     // Check if the room is closed and the user has already joined this session or played the record.
-    if ($haspassed && !$roomavailable && $usercomplete) {
+    if (!$roomavailable && $usercomplete) {
         return null;
+    }
+    // Get if the user can join. Push it further down the line so we have a chance to exit before
+    // even doing this check.
+    // /CONTRIB-8419 : Here we will check first  if the meeting info was stored in the cache already or not.
+    $cache = cache::make_from_params(cache_store::MODE_APPLICATION, 'mod_bigbluebuttonbn', 'meetings_cache');
+    $usercanjoin = false;
+    $mid = $bigbluebuttonbn->meetingid . '-' . $bigbluebuttonbn->course . '-' . $bigbluebuttonbn->id;
+    if ($cache->get($mid)) {
+        list($usercanjoin) = bigbluebuttonbn_user_can_join_meeting($bigbluebuttonbn);
     }
 
     // Check if the user can join this session.
-    $actionable = ($roomavailable && $usercanjoin) || $haspassed;
+    $actionable = ($roomavailable && $usercanjoin);
 
     // Action data.
     $string = get_string('view_room', 'bigbluebuttonbn');
@@ -1201,6 +1208,27 @@ function mod_bigbluebuttonbn_core_calendar_provide_event_action(
     }
 
     return $factory->create_instance($string, $url, 1, $actionable);
+}
+
+/**
+ * Is the event visible?
+ *
+ * @param calendar_event $event
+ * @return bool Returns true if the event is visible to the current user, false otherwise.
+ */
+function mod_bigbluebuttonbn_core_calendar_is_event_visible(calendar_event $event) {
+    global $DB;
+    $cm = get_fast_modinfo($event->courseid)->instances['bigbluebuttonbn'][$event->instance];
+    $bigbluebuttonbn = $DB->get_record('bigbluebuttonbn', array('id' => $cm->instance), '*', MUST_EXIST);
+    // Create array bbbsession with configuration for BBB server.
+    $bbbsession['course'] = $cm->get_course();
+    $bbbsession['coursename'] = $cm->get_course()->fullname;
+    $bbbsession['cm'] = $cm;
+    $bbbsession['bigbluebuttonbn'] = $bigbluebuttonbn;
+    $context = context_module::instance($cm->id);
+    mod_bigbluebuttonbn\locallib\bigbluebutton::view_bbbsession_set($context, $bbbsession);
+    $activitystatus = bigbluebuttonbn_view_get_activity_status($bbbsession);
+    return $activitystatus != 'ended';
 }
 
 /**
